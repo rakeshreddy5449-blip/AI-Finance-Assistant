@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date as DateType
 
 from sqlalchemy import Date, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,7 +20,7 @@ class Transaction(Base):
         index=True,
     )
 
-    date: Mapped[date] = mapped_column(
+    date: Mapped[DateType] = mapped_column(
         Date,
         nullable=False,
     )

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
-
 from backend.app.routers.auth import router as auth_router
-
+from backend.app.routers.transactions import router as transactions_router
 app = FastAPI(
     title="AI Finance Assistant API",
     description="Backend API for the AI Finance Assistant.",
@@ -9,7 +8,9 @@ app = FastAPI(
 )
 
 
+
 app.include_router(auth_router)
+app.include_router(transactions_router)
 
 
 @app.get("/")
