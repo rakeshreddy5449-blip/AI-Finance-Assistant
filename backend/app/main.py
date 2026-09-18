@@ -6,6 +6,7 @@ from backend.app.routers.analytics import router as analytics_router
 from backend.app.routers.insights import router as insights_router
 from backend.app.routers.budgets import router as budgets_router
 from backend.app.routers.ml import router as ml_router
+from backend.app.routers.forecast import router as forecast_router
 
 
 app = FastAPI(
@@ -21,6 +22,7 @@ app.include_router(analytics_router)
 app.include_router(insights_router)
 app.include_router(budgets_router)
 app.include_router(ml_router)
+app.include_router(forecast_router)
 
 
 @app.get("/")
