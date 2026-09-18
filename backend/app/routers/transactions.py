@@ -11,6 +11,7 @@ from backend.app.schemas.transaction import (
 )
 from backend.app.models.user import User
 from backend.app.security.auth import get_current_user
+from backend.app.services.ml_service import predict_category
 
 
 router = APIRouter(
@@ -29,7 +30,25 @@ def create_transaction(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if transaction_data.category not in TRANSACTION_CATEGORIES:
+    category = transaction_data.category
+
+    # Automatically predict category for expenses
+    # when the user does not provide one.
+    if transaction_data.type == "expense" and category is None:
+        try:
+            prediction = predict_category(transaction_data.description)
+            category = prediction["category"]
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+    # Income transactions without a category use "Other".
+    if category is None:
+        category = "Other"
+
+    if category not in TRANSACTION_CATEGORIES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid transaction category",
@@ -41,16 +60,15 @@ def create_transaction(
         description=transaction_data.description,
         amount=transaction_data.amount,
         type=transaction_data.type,
-        category=transaction_data.category,
+        category=category,
     )
 
     db.add(transaction)
     db.commit()
     db.refresh(transaction)
 
-    
-
     return transaction
+
 
 @router.get(
     "",
@@ -60,14 +78,20 @@ def get_transactions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    transactions = db.query(Transaction).filter(
-        Transaction.user_id == current_user.user_id
-    ).order_by(
-        Transaction.date.desc(),
-        Transaction.transaction_id.desc(),
-    ).all()
+    transactions = (
+        db.query(Transaction)
+        .filter(
+            Transaction.user_id == current_user.user_id
+        )
+        .order_by(
+            Transaction.date.desc(),
+            Transaction.transaction_id.desc(),
+        )
+        .all()
+    )
 
     return transactions
+
 
 @router.put(
     "/{transaction_id}",
@@ -79,10 +103,14 @@ def update_transaction(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    transaction = db.query(Transaction).filter(
-        Transaction.transaction_id == transaction_id,
-        Transaction.user_id == current_user.user_id,
-    ).first()
+    transaction = (
+        db.query(Transaction)
+        .filter(
+            Transaction.transaction_id == transaction_id,
+            Transaction.user_id == current_user.user_id,
+        )
+        .first()
+    )
 
     if transaction is None:
         raise HTTPException(
@@ -109,6 +137,7 @@ def update_transaction(
 
     return transaction
 
+
 @router.delete(
     "/{transaction_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -118,10 +147,14 @@ def delete_transaction(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    transaction = db.query(Transaction).filter(
-        Transaction.transaction_id == transaction_id,
-        Transaction.user_id == current_user.user_id,
-    ).first()
+    transaction = (
+        db.query(Transaction)
+        .filter(
+            Transaction.transaction_id == transaction_id,
+            Transaction.user_id == current_user.user_id,
+        )
+        .first()
+    )
 
     if transaction is None:
         raise HTTPException(
