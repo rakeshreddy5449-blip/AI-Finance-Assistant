@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import api from "./services/api";
 import Dashboard from "./components/Dashboard";
 import Transactions from "./components/Transactions";
+import Analytics from "./components/Analytics";
+import Budgets from "./components/Budgets";
+import Insights from "./components/Insights";
 import "./App.css";
 
 function App() {
   const [mode, setMode] = useState("login");
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -13,11 +17,30 @@ function App() {
   });
 
   const [message, setMessage] = useState("");
+
   const [loggedIn, setLoggedIn] = useState(
     Boolean(localStorage.getItem("token"))
   );
 
   const [activePage, setActivePage] = useState("Dashboard");
+  useEffect(() => {
+  const handleAuthExpired = () => {
+    setLoggedIn(false);
+    setActivePage("Dashboard");
+  };
+
+  window.addEventListener(
+    "auth-expired",
+    handleAuthExpired
+  );
+
+  return () => {
+    window.removeEventListener(
+      "auth-expired",
+      handleAuthExpired
+    );
+  };
+}, []);
 
   const handleChange = (event) => {
     setForm({
@@ -264,14 +287,21 @@ function App() {
             <Dashboard />
           ) : activePage === "Transactions" ? (
             <Transactions />
+          ) : activePage === "Analytics" ? (
+            <Analytics />
+          ) : activePage === "Budgets" ? (
+            <Budgets />
+          ) : activePage === "Insights" ? (
+            <Insights />
           ) : (
             <div className="page-placeholder">
               <h2>{activePage}</h2>
               <p>
-                This section will be connected to the corresponding finance feature next.
+                This section will be connected to the corresponding
+                finance feature next.
               </p>
-               </div>
-            )}
+            </div>
+          )}
         </main>
       </div>
     </div>

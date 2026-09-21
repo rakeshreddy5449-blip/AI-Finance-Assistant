@@ -1,15 +1,9 @@
 from datetime import date
-from math import sqrt
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from backend.app.models.transaction import Transaction
-
-
-MINIMUM_MONTHS_REQUIRED = 3
 
 
 def get_monthly_expenses(
@@ -53,12 +47,48 @@ def get_monthly_expenses(
     ]
 
 
+def get_next_month(month_value: str) -> str:
+    """
+    Return the month immediately after YYYY-MM.
+    """
+
+    year, month = map(
+        int,
+        month_value.split("-"),
+    )
+
+    if month == 12:
+        return f"{year + 1:04d}-01"
+
+    return f"{year:04d}-{month + 1:02d}"
+
+
 def forecast_spending(
     db: Session,
     user_id: int,
 ) -> dict:
     """
-    Forecast next month's spending using Linear Regression.
+    Estimate next month's spending.
+
+    Logic:
+    1 month:
+        Use the current/latest month as the baseline.
+
+    2+ months:
+        Compare the latest two monthly totals.
+        Forecast the next month using the same absolute
+        month-to-month change.
+
+    Example:
+        September = ₹11,000
+        October   = ₹13,000
+
+        Change = ₹13,000 - ₹11,000
+               = ₹2,000
+
+        November forecast
+               = ₹13,000 + ₹2,000
+               = ₹15,000
     """
 
     monthly_data = get_monthly_expenses(
@@ -66,118 +96,182 @@ def forecast_spending(
         user_id=user_id,
     )
 
-    if len(monthly_data) < MINIMUM_MONTHS_REQUIRED:
+    # -----------------------------------------------------
+    # NO EXPENSE DATA
+    # -----------------------------------------------------
+
+    if len(monthly_data) == 0:
         return {
             "forecast_available": False,
             "message": (
-                "Insufficient historical data for forecasting. "
-                f"At least {MINIMUM_MONTHS_REQUIRED} months "
-                "of expense history are required."
+                "No expense data is available for forecasting. "
+                "Add an expense transaction to generate a "
+                "spending estimate."
             ),
-            "historical_months": len(monthly_data),
-            "model": "LinearRegression",
+            "historical_months": 0,
+            "historical_data": [],
+            "model": "MonthToMonthTrend",
+            "forecast_method": "month-to-month trend",
         }
 
-    x = [
-        [index]
-        for index in range(1, len(monthly_data) + 1)
-    ]
+    # -----------------------------------------------------
+    # ONE MONTH OF DATA
+    # -----------------------------------------------------
 
-    y = [
-        item["expenses"]
-        for item in monthly_data
-    ]
+    if len(monthly_data) == 1:
+        latest_month = monthly_data[-1]
 
-    # Hold out the most recent month for a simple
-    # evaluation of forecast error.
-    x_train = x[:-1]
-    y_train = y[:-1]
+        latest_expenses = latest_month["expenses"]
 
-    x_test = x[-1:]
-    y_test = y[-1:]
-
-    evaluation_model = LinearRegression()
-    evaluation_model.fit(x_train, y_train)
-
-    test_prediction = evaluation_model.predict(x_test)
-
-    mae = mean_absolute_error(
-        y_test,
-        test_prediction,
-    )
-
-    rmse = sqrt(
-        mean_squared_error(
-            y_test,
-            test_prediction,
+        forecast_month = get_next_month(
+            latest_month["month"]
         )
+
+        return {
+            "forecast_available": True,
+            "forecast_month": forecast_month,
+            "predicted_expense": round(
+                latest_expenses,
+                2,
+            ),
+            "historical_months": 1,
+            "historical_data": monthly_data,
+            "previous_month_expense": None,
+            "latest_month_expense": round(
+                latest_expenses,
+                2,
+            ),
+            "change_amount": None,
+            "change_percentage": None,
+            "trend": "baseline",
+            "model": "MonthToMonthTrend",
+            "forecast_method": (
+                "latest-month baseline"
+            ),
+            "note": (
+                "Only one month of expense history is "
+                "available, so the latest month's spending "
+                "is used as the baseline for the next month."
+            ),
+        }
+
+    # -----------------------------------------------------
+    # TWO OR MORE MONTHS
+    # -----------------------------------------------------
+
+    previous_month = monthly_data[-2]
+    latest_month = monthly_data[-1]
+
+    previous_expenses = float(
+        previous_month["expenses"]
     )
 
-    # Train final model on all available history.
-    final_model = LinearRegression()
-    final_model.fit(x, y)
+    latest_expenses = float(
+        latest_month["expenses"]
+    )
 
-    next_month_number = len(monthly_data) + 1
+    # Absolute change between the latest two months.
+    change_amount = (
+        latest_expenses -
+        previous_expenses
+    )
 
-    predicted_expense = final_model.predict(
-        [[next_month_number]]
-    )[0]
-
-    # If Linear Regression produces a non-positive
-    # spending estimate, use the average of the
-    # most recent three months as a practical fallback.
-    predicted_expense = float(predicted_expense)
-    fallback_used = False
-
-    if predicted_expense <= 0:
-        recent_values = y[-3:]
-        predicted_expense = sum(recent_values) / len(recent_values)
-        fallback_used = True
+    # Forecast using the same observed change.
+    predicted_expense = (
+        latest_expenses +
+        change_amount
+    )
 
     predicted_expense = max(
         0.0,
         predicted_expense,
     )
 
-    today = date.today()
-
-    if today.month == 12:
-        next_month = date(
-            today.year + 1,
-            1,
-            1,
-        )
+    # Percentage change is useful for displaying
+    # the trend to the user.
+    if previous_expenses != 0:
+        change_percentage = (
+            change_amount /
+            previous_expenses
+        ) * 100
     else:
-        next_month = date(
-            today.year,
-            today.month + 1,
-            1,
-        )
+        change_percentage = None
+
+    if change_amount > 0:
+        trend = "increased"
+    elif change_amount < 0:
+        trend = "decreased"
+    else:
+        trend = "stable"
+
+    forecast_month = get_next_month(
+        latest_month["month"]
+    )
 
     return {
         "forecast_available": True,
-        "forecast_month": next_month.strftime("%Y-%m"),
+        "forecast_month": forecast_month,
         "predicted_expense": round(
             predicted_expense,
             2,
         ),
-        "historical_months": len(monthly_data),
-        "historical_data": monthly_data,
-        "evaluation": {
-            "mae": round(float(mae), 2),
-            "rmse": round(float(rmse), 2),
-        },
-        "model": "LinearRegression",
-        "forecast_method": (
-            "recent-average fallback"
-            if fallback_used
-            else "LinearRegression"
+        "historical_months": len(
+            monthly_data
         ),
+        "historical_data": monthly_data,
+
+        "previous_month": {
+            "month": previous_month["month"],
+            "expenses": round(
+                previous_expenses,
+                2,
+            ),
+        },
+
+        "latest_month": {
+            "month": latest_month["month"],
+            "expenses": round(
+                latest_expenses,
+                2,
+            ),
+        },
+
+        "previous_month_expense": round(
+            previous_expenses,
+            2,
+        ),
+
+        "latest_month_expense": round(
+            latest_expenses,
+            2,
+        ),
+
+        "change_amount": round(
+            change_amount,
+            2,
+        ),
+
+        "change_percentage": (
+            round(
+                change_percentage,
+                2,
+            )
+            if change_percentage is not None
+            else None
+        ),
+
+        "trend": trend,
+
+        "model": "MonthToMonthTrend",
+
+        "forecast_method": (
+            "latest-month trend"
+        ),
+
         "note": (
-        "This is an estimated future spending value "
-        "based on historical expense patterns. "
-        "A recent-average fallback is used when "
-        "Linear Regression produces a non-positive estimate."
-),
-        
+            "The forecast compares the latest two "
+            "months and extends their spending change "
+            "into the next month. This is an estimate "
+            "based on historical spending behavior."
+        ),
     }

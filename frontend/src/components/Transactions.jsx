@@ -182,7 +182,8 @@ function Transactions() {
 
       setTransactions((currentTransactions) =>
         currentTransactions.filter(
-          (transaction) => transaction.id !== transactionId
+          (transaction) =>
+            transaction.transaction_id !== transactionId
         )
       );
     } catch (err) {
@@ -306,7 +307,7 @@ function Transactions() {
                     transaction.type === "income";
 
                   return (
-                    <tr key={transaction.id}>
+                    <tr key={transaction.transaction_id}>
                       <td>{formatDate(transaction.date)}</td>
 
                       <td className="transaction-description">
@@ -354,7 +355,7 @@ function Transactions() {
                           <button
                             className="delete-button"
                             onClick={() =>
-                              handleDelete(transaction.id)
+                              handleDelete(transaction.transaction_id)
                             }
                             title="Delete transaction"
                           >
