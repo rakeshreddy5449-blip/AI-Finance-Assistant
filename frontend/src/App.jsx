@@ -1,6 +1,7 @@
 import { useState } from "react";
 import api from "./services/api";
 import Dashboard from "./components/Dashboard";
+import Transactions from "./components/Transactions";
 import "./App.css";
 
 function App() {
@@ -261,15 +262,16 @@ function App() {
         <main className="dashboard-content">
           {activePage === "Dashboard" ? (
             <Dashboard />
+          ) : activePage === "Transactions" ? (
+            <Transactions />
           ) : (
-            <div className="dashboard-card">
-              <h3>{activePage}</h3>
+            <div className="page-placeholder">
+              <h2>{activePage}</h2>
               <p>
-                This section will be connected to the corresponding
-                finance feature next.
+                This section will be connected to the corresponding finance feature next.
               </p>
-            </div>
-          )}
+               </div>
+            )}
         </main>
       </div>
     </div>

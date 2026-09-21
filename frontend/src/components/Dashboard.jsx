@@ -231,26 +231,43 @@ function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <PieChart>
-                <Pie
-                  data={categoryData}
-                  dataKey="amount"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={105}
-                  label
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`category-${index}`} />
-                  ))}
-                </Pie>
+  <Pie
+    data={categoryData}
+    dataKey="amount"
+    nameKey="category"
+    cx="50%"
+    cy="50%"
+    outerRadius={105}
+    label
+  >
+    {categoryData.map((entry, index) => {
+      const amounts = categoryData.map((item) => Number(item.amount));
+      const maxAmount = Math.max(...amounts);
+      const minAmount = Math.min(...amounts);
 
-                <Tooltip
-                  formatter={(value) => `₹${value}`}
-                />
+      let fill = "#F2C94C"; // Average → Yellow
 
-                <Legend />
-              </PieChart>
+      if (Number(entry.amount) === maxAmount) {
+        fill = "#E53935"; // Highest → Red
+      } else if (Number(entry.amount) === minAmount) {
+        fill = "#2F80ED"; // Lowest → Blue
+      }
+
+      return (
+        <Cell
+          key={`category-${index}`}
+          fill={fill}
+        />
+      );
+    })}
+  </Pie>
+
+  <Tooltip
+    formatter={(value) => `₹${value}`}
+  />
+
+  <Legend />
+</PieChart>
             </ResponsiveContainer>
           )}
         </div>
